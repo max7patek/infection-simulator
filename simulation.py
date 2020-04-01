@@ -1,11 +1,16 @@
 
 from dataclasses import dataclass
-from enum import Enum
+from simulation_abcs import SimulationComponent, Location, Person, PersonState
 from typing import Tuple, List
 from itertools import product
 from random import random, gauss, paretovariate, uniform, choices, triangular
+import infection_detector
 import math
 import time
+from tqdm import tqdm
+import logging
+
+log = logging.getLogger(__name__)
 
 def roll(p):
     return random() < p
@@ -16,41 +21,6 @@ def _number_to_pixel(i):
     if i >= 10:
         return '@'
     return str(i)
-
-
-class PersonState(Enum):
-    HEALTHY = 1
-    ASYMPT = 2
-    SICK = 3
-    REMOVED = 4
-
-
-class SimulationComponentMeta(type):
-    def __set_name__(cls, owner, name):
-        cls._name = name
-    def __get__(cls, obj, type=None):
-        if obj is None:
-            return cls
-        class New(cls):
-            simulation = obj
-        obj.__dict__[cls._name] = New 
-        return New
-
-
-class SimulationComponent(metaclass=SimulationComponentMeta):
-    pass
-
-
-@dataclass
-class Location(SimulationComponent):
-    x: float
-    y: float
-
-    def distance(self, other):
-        return math.hypot(self.x - other.x, self.y - other.y)
-    
-    def __add__(self, other):
-        return Location(self.x + other.x, self.y + other.y)
 
 
 @dataclass
@@ -70,10 +40,12 @@ class Simulation:
     grocery_frequency_mean: float = 0.2
     grocery_frequency_stddev: float = 0.05
     time_at_grocery: int = 1
-    distancing_alpha: float = 2 # the exponential parameter to a pareto law distribution
+    distancing_alpha: float = 2  # the exponential parameter to a pareto law distribution
+    maximum_gathering: int = 10  # the number of children per node in space partitioning algorithm
     starting_sick: int = 10
     num_trials: int = 100
-
+    output_state: bool = True
+    output_progress_bars: bool = True
 
 
     def run(self):
@@ -82,7 +54,8 @@ class Simulation:
         self.print_state()
         for _ in range(self.num_trials):
             self.update()
-            self.print_state()
+            if self.output_state:
+                self.print_state()
             if self.asymptomatic_count + self.sick_count == 0:
                 break
             #time.sleep(1)
@@ -90,25 +63,17 @@ class Simulation:
     def update(self):
         for p in self.people:
             p.update()
-
-#        infected = filter(lambda p: p.state in (PersonState.SICK, PersonState.ASYMPT), self.people)
-        infected = [p for p in self.people if p.state in (PersonState.SICK, PersonState.ASYMPT)]
-#        healthy = (filter(lambda p: p.state == PersonState.HEALTHY, self.people))
-        healthy = [p for p in self.people if p.state == PersonState.HEALTHY]
-        for i, h in product(infected, healthy):
-            if h.state == PersonState.ASYMPT:
-                continue
-            dist = i.location.distance(h.location)
-            if dist < 2:
-
-            # infection_probability = self.spread_multiplier * gauss(0, self.spread_radius)
-            # if dist < infection_probability:
-                h.state = PersonState.ASYMPT
-
+        to_be_sick = infection_detector.detect(self)
+        for p in to_be_sick:
+            p.state = PersonState.ASYMPT
         self.fix_people_out_of_bounds()
 
 
     def init(self) -> None:
+        if self.output_progress_bars:
+            self.tqdm = tqdm
+        else:
+            self.tqdm = lambda iterable, *args, **kwargs: iterable
         self.people : List[self.Person] = []
         self.homes : List[self.Home] = []
         self.groceries : List[self.Grocery] = []
@@ -117,7 +82,8 @@ class Simulation:
             self.cities.append(self.City.from_params())
         for _ in range(round(self.num_homes / self.homes_per_grocery)):
             self.groceries.append(self.Grocery.from_params())
-        for _ in range(self.num_homes):
+        log.info("Initializing People")
+        for _ in self.tqdm(range(self.num_homes)):
             self.homes.append(self.Home.from_params())
             # populates people too
         self.num_people = len(self.people)
@@ -182,7 +148,7 @@ class Simulation:
 
 
     @dataclass
-    class Person(SimulationComponent):
+    class Person(Person):
         location: Location
         state: PersonState
         home: Location
@@ -232,7 +198,7 @@ class Simulation:
             distancing_factor = triangular(0, 1, 0)**2
             closest_grocery = min(
                 cls.simulation.groceries, 
-                key=lambda g: math.hypot(g.x - home.x, g.y - home.y),
+                key=home.distance,
             )
             self = cls(
                 home=home, 
@@ -278,5 +244,5 @@ class Simulation:
             return cls(x=x, y=y, size=size)
 
 
-sim = Simulation()
+sim = Simulation(num_homes=50000, width=5000, output_progress_bars=True)
 sim.run()
