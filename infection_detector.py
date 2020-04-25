@@ -52,17 +52,17 @@ class Node:
 
 def detect(simulation):
     """
-    
+
     """
     shuffle(simulation.people)
-    nonremoved = [
+    nonremoved = (
         p for p in simulation.people
         if p.state != PersonState.REMOVED
-    ]
-    people_iter = iter(nonremoved)
-    root = Node(next(people_iter), [None] * simulation.maximum_gathering)
+    )
+#    people_iter = iter(nonremoved)
+    root = Node(next(nonremoved), [None] * simulation.maximum_gathering)
     for p in simulation.tqdm(
-        people_iter, 
+        nonremoved, 
         total=simulation.num_people - simulation.removed_count-1
     ):
         node = root
@@ -72,11 +72,11 @@ def detect(simulation):
 
     to_be_sick = []
     for pocket in root.pockets():
-        infected = [
+        infected = (
             p for p in pocket
             if p.state in (PersonState.SICK, PersonState.ASYMPT)
-        ]
-        healthy = [p for p in pocket if p.state == PersonState.HEALTHY]
+        )
+        healthy = (p for p in pocket if p.state == PersonState.HEALTHY)
         for i, h in product(infected, healthy):
             dist = i.location.distance(h.location)
             infection_probability = abs(
