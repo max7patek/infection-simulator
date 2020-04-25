@@ -1,19 +1,12 @@
 
-from dataclasses import dataclass
-from simulation_abcs import SimulationComponent, Location, Person, PersonState
-from typing import Tuple, List
-from itertools import product
-from random import random, gauss, paretovariate, uniform, choices, triangular
-import infection_detector
+from dataclasses import dataclass, fields, field
 import math
-import time
+from typing import List
+from abc import ABCMeta, abstractmethod
+import infection_detector
+from random import random, gauss, paretovariate, uniform, choices, triangular
+from simulation_abcs import AbstractPerson, Location, PersonState, SimulationComponent
 from tqdm import tqdm
-import logging
-
-log = logging.getLogger(__name__)
-
-def roll(p):
-    return random() < p
 
 def _number_to_pixel(i):
     if i == 0:
@@ -22,35 +15,50 @@ def _number_to_pixel(i):
         return '@'
     return str(i)
 
+def roll(p):
+    return random() < p
 
 @dataclass
-class Simulation:
-    width: int = 1000
-    num_cities: int = 10
-    num_homes: int = 1000
-    homes_per_grocery: float = 100
-    people_per_home_mean: float = 3
-    people_per_home_stddev: float = 1
-    city_spread: float = 100  # the std-dev of a bell curve
-    city_size_alpha: float = 1  # the exponential parameter to a pareto distribution (maybe should be zipf)
+class Simulation(metaclass=ABCMeta):
+    # containers
+    people: List[AbstractPerson] = field(default_factory=list)
+    homes: List[Location] = field(default_factory=list)
+    groceries: List[Location] = field(default_factory=list)
+
+    # disease spread
     spread_radius: float = 1  # the std-dev of a bell curve
     spread_multiplier: float = 2  # multiplied with the output of the spread bell curve
     symptom_onset_p: float = 0.2  # the p of a bernoulli distribution
     recovery_p: float = 0.1  # the p of a bernoulli distribution 
+    starting_sick: int = 10
+
+    # behaviors
+    maximum_gathering: int = 10  # the number of children per node in space partitioning algorithm
     grocery_frequency_mean: float = 0.2
     grocery_frequency_stddev: float = 0.05
     time_at_grocery: int = 1
     distancing_alpha: float = 2  # the exponential parameter to a pareto law distribution
-    maximum_gathering: int = 10  # the number of children per node in space partitioning algorithm
-    starting_sick: int = 10
+
+    # parameters
     num_trials: int = 100
     output_state: bool = True
     output_progress_bars: bool = True
+    width: int = 1000
+
+
+    @abstractmethod
+    def init(self, *args, **kwargs):
+        if self.output_progress_bars:
+            self.tqdm = tqdm
+        else:
+            self.tqdm = lambda iterable, *args, **kwargs: iterable
 
 
     def run(self):
         self.init()
-        print(self)
+        initial_sick = choices(self.people, k=self.starting_sick) 
+        for p in initial_sick:
+            p.state = PersonState.ASYMPT
         self.print_state()
         for _ in range(self.num_trials):
             self.update()
@@ -58,42 +66,17 @@ class Simulation:
                 self.print_state()
             if self.asymptomatic_count + self.sick_count == 0:
                 break
-            #time.sleep(1)
-            
+
     def update(self):
-        for p in self.people:
-            p.update()
+        for field in fields(self):
+            attr = getattr(self, field.name)
+            if isinstance(attr, list) and attr and isinstance(attr[0], SimulationComponent):
+                for comp in attr:
+                    comp.update()
         to_be_sick = infection_detector.detect(self)
         for p in to_be_sick:
             p.state = PersonState.ASYMPT
         self.fix_people_out_of_bounds()
-
-
-    def init(self) -> None:
-        if self.output_progress_bars:
-            self.tqdm = tqdm
-        else:
-            self.tqdm = lambda iterable, *args, **kwargs: iterable
-        self.people : List[self.Person] = []
-        self.homes : List[self.Home] = []
-        self.groceries : List[self.Grocery] = []
-        self.cities : List[Location] = []
-        for _ in range(self.num_cities):
-            self.cities.append(self.City.from_params())
-        for _ in range(round(self.num_homes / self.homes_per_grocery)):
-            self.groceries.append(self.Grocery.from_params())
-        log.info("Initializing People")
-        for _ in self.tqdm(range(self.num_homes)):
-            self.homes.append(self.Home.from_params())
-            # populates people too
-        self.num_people = len(self.people)
-        for loc in self.homes + self.groceries:
-            loc.x = max(0, min(loc.x, self.width-1))
-            loc.y = max(0, min(loc.y, self.width-1))
-        self.fix_people_out_of_bounds()
-        initial_sick = choices(self.people, k=self.starting_sick) 
-        for p in initial_sick:
-            p.state = PersonState.ASYMPT
 
     
     @property
@@ -139,16 +122,9 @@ class Simulation:
     def get_random_location(self) -> Location:
         return Location(x=uniform(0, self.width), y=uniform(0, self.width))
 
-    def get_location_from_params(self) -> Location:
-        city = choices(self.cities, (c.size for c in self.cities))[0]
-        x = gauss(city.x, self.city_spread)
-        y = gauss(city.y, self.city_spread)
-        return Location(x=x, y=y)
-
-
 
     @dataclass
-    class Person(Person):
+    class Person(AbstractPerson):
         location: Location
         state: PersonState
         home: Location
@@ -189,7 +165,7 @@ class Simulation:
             
 
         @classmethod
-        def from_params(cls, home):
+        def init(cls, home):
             grocery_frequency = gauss(
                 cls.simulation.grocery_frequency_mean, 
                 cls.simulation.grocery_frequency_stddev
@@ -210,39 +186,4 @@ class Simulation:
             )
             return self
 
-    @dataclass
-    class Home(Location):
-        @classmethod
-        def from_params(cls):
-            loc = cls.simulation.get_location_from_params()
-            self = cls(x=loc.x, y=loc.y)
-            num_people = round(gauss(
-                self.simulation.people_per_home_mean, 
-                self.simulation.people_per_home_stddev,
-            ))
-            for _ in range(num_people):
-                self.simulation.people.append(self.simulation.Person.from_params(self))
-            return self
 
-    @dataclass
-    class Grocery(Location):
-        @classmethod
-        def from_params(cls):
-            loc = cls.simulation.get_location_from_params()
-            self = cls(x=loc.x, y=loc.y)
-            return self
-                
-    @dataclass
-    class City(Location):
-        size: int
-
-        @classmethod
-        def from_params(cls):
-            x = uniform(0, cls.simulation.width)
-            y = uniform(0, cls.simulation.width)
-            size = paretovariate(cls.simulation.city_size_alpha)
-            return cls(x=x, y=y, size=size)
-
-
-sim = Simulation(num_homes=50000, width=5000, output_progress_bars=True)
-sim.run()

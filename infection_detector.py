@@ -2,14 +2,14 @@
 from typing import List, Union, Optional
 from dataclasses import dataclass, field
 from random import shuffle
-from simulation_abcs import Location, Person, PersonState
+from simulation_abcs import Location, AbstractPerson, PersonState
 from itertools import product
 from random import gauss
 
 
 @dataclass
 class Node:
-    representative: Person
+    representative: AbstractPerson
     children: List[Optional["Node"]]
     child_index: int = 0
 
@@ -63,7 +63,7 @@ def detect(simulation):
     root = Node(next(nonremoved), [None] * simulation.maximum_gathering)
     for p in simulation.tqdm(
         nonremoved, 
-        total=simulation.num_people - simulation.removed_count-1
+        total=len(simulation.people) - simulation.removed_count-1
     ):
         node = root
         while node.full():
@@ -71,7 +71,7 @@ def detect(simulation):
         node.push_back(p, simulation.maximum_gathering)
 
     to_be_sick = []
-    for pocket in root.pockets():
+    for pocket in simulation.tqdm(list(root.pockets())):
         infected = (
             p for p in pocket
             if p.state in (PersonState.SICK, PersonState.ASYMPT)
