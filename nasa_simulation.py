@@ -76,7 +76,7 @@ class NasaSimulation(Simulation):
                             remap(row.CENTROID_Y, min_y, max_y, 0, self.width),
                         ),
                         row.UN_2020_E,
-                        row.LAND_A_KM,
+                        row.LAND_A_KM*400,
                     )
                 )
 
@@ -89,7 +89,7 @@ class NasaSimulation(Simulation):
                 ))
                 num_people = min(num_people, centroid.num)
                 centroid.num -= num_people
-                noise = Location(gauss(0, 1/centroid.density), gauss(0, centroid.density))
+                noise = Location(gauss(0, centroid.area), gauss(0, centroid.area))
                 home = self.Home.init(centroid.loc + noise, num_people)
                 self.bound_loc(home)
                 self.homes.append(home)

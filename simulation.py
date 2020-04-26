@@ -59,15 +59,20 @@ class Simulation(metaclass=ABCMeta):
             self.tqdm = lambda iterable, *args, **kwargs: iterable
 
 
+    def get_xs_ys(self):
+        xs = [p.location.x for p in self.visible_people]
+        ys = [p.location.y for p in self.visible_people] 
+        return xs, ys
+
     def setup_animation(self):
         self.img = plt.imread("cville.png")
         self.fig = plt.figure()
         self.fig.set_dpi(100)
         self.fig.set_size_inches(7, 6.5)
         ax = plt.axes(xlim=(0,self.width),ylim=(0,self.width))
-        xs = [p.location.x for p in self.people]
-        ys = [p.location.y for p in self.people]
-        self.scatter=ax.scatter(xs, ys)
+        self.visible_people = [p for p in self.people if random() < 0.1]
+        xs, ys = self.get_xs_ys()
+        self.scatter=ax.scatter(xs, ys, s=1, c="r")
 
     def choose_initial_sick(self):
         initial_sick = choices(self.people, k=self.starting_sick) 
@@ -97,10 +102,8 @@ class Simulation(metaclass=ABCMeta):
         if self.output_state:
             self.print_state()
 
-        xs = [p.location.x for p in self.people]
-        ys = [p.location.y for p in self.people]
+        xs, ys = self.get_xs_ys()
         self.scatter.set_offsets(np.c_[xs, ys])
-        print(np.c_[xs, ys])
         return self.scatter,  
 
     
@@ -186,7 +189,7 @@ class Simulation(metaclass=ABCMeta):
                 if self.location.distance(self.home) > TURF:
                     #print("wondered to far, returning")
                     return self.home
-                return self.location + Location(gauss(0, .1), gauss(0, .1))
+                return self.location + Location(gauss(0, 1), gauss(0, 1))
             else: # sick
                 return self.home
             
@@ -198,7 +201,7 @@ class Simulation(metaclass=ABCMeta):
                 cls.simulation.grocery_frequency_stddev
             )
             #distancing_factor = paretovariate(cls.simulation.distancing_alpha)
-            distancing_factor = triangular(0, 1, 0)**2
+            distancing_factor = triangular(0, 1, 0)**10
             closest_grocery = min(
                 cls.simulation.groceries, 
                 key=home.distance,
