@@ -118,11 +118,13 @@ class Simulation(metaclass=ABCMeta):
         return sum(1 for p in self.people if p.state == PersonState.REMOVED)
         
 
+    def bound_loc(self, loc):
+        loc.x = max(0, min(loc.x, self.width-1))
+        loc.y = max(0, min(loc.y, self.width-1))
+
     def fix_people_out_of_bounds(self):
         for p in self.people:
-            loc = p.location
-            loc.x = max(0, min(loc.x, self.width-1))
-            loc.y = max(0, min(loc.y, self.width-1))
+            self.bound_loc(p.location)
         
 
     def print_state(self):
