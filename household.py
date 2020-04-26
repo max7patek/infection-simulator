@@ -52,7 +52,7 @@ import random
 from scipy.misc import imread
 
 
-img = imread("image.png")
+img = imread("cville.png")
 
 fig = plt.figure()
 fig.set_dpi(100)
@@ -79,7 +79,7 @@ anim = FuncAnimation(fig, animate,
                                interval=20,
                                blit=True)
 
-plt.imshow(img,zorder=0,  extent=[0.1, 20.0, 0.1, 20.0])
+plt.imshow(img,zorder=0,  extent=[MIN_X, MAX_X, MIN_Y, MAX_Y])
 # anim.save('the_movie.mp4', writer = 'ffmpeg', fps=30)
 plt.show()
 
