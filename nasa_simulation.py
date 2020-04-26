@@ -6,7 +6,9 @@ from dataclasses import dataclass, field
 from typing import Tuple, List
 from types import SimpleNamespace
 import csv
-
+import matplotlib.pyplot as plt 
+from matplotlib.animation import FuncAnimation
+import numpy as np
 
 Centroid = namedtuple("Centroid", ["loc", "num"])
 
@@ -69,7 +71,7 @@ class NasaSimulation(Simulation):
                 )
         self.groceries.append(self.Grocery.init(Location(1, 1)))
         for centroid in self.centroids:
-            self.homes.append(self.Home.init(centroid.loc, centroid.num))
+            self.homes.append(self.Home.init(centroid.loc, 1))
 
 #         last = None
 #         for row in sorted(rows, key=lambda row: row.CENTROID_X):
@@ -100,5 +102,20 @@ class NasaSimulation(Simulation):
 
 if __name__ == "__main__":
     sim = NasaSimulation(filename="CharlottesvillePopulationData.csv", output_progress_bars=True)
-    sim.run()
+    sim.init()
+    sim.setup_animation()
+    sim.choose_initial_sick()
+
+    anim = FuncAnimation(
+        sim.fig, 
+        sim.update, 
+        frames=360, 
+        interval=200,
+        blit=True,
+    )
+
+    plt.imshow(sim.img, zorder=0,  extent=[0, sim.width, 0, sim.width])
+    #anim.save('animation.mp4', writer = 'ffmpeg', fps=30)
+    plt.show()
+    #sim.run()
 

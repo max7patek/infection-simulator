@@ -8,6 +8,11 @@ from random import random, gauss, paretovariate, uniform, choices, triangular
 from simulation_abcs import AbstractPerson, Location, PersonState, SimulationComponent
 from tqdm import tqdm
 
+import matplotlib.pyplot as plt 
+from matplotlib.animation import FuncAnimation
+import numpy as np
+# from scipy.misc import imread
+
 def _number_to_pixel(i):
     if i == 0:
         return ' '
@@ -18,6 +23,7 @@ def _number_to_pixel(i):
 def roll(p):
     return random() < p
 
+
 @dataclass
 class Simulation(metaclass=ABCMeta):
     # containers
@@ -26,16 +32,15 @@ class Simulation(metaclass=ABCMeta):
     groceries: List[Location] = field(default_factory=list)
 
     # disease spread
-    spread_radius: float = 1  # the std-dev of a bell curve
-    spread_multiplier: float = 2  # multiplied with the output of the spread bell curve
+    spread_radius: float = .75  # the std-dev of a bell curve
     symptom_onset_p: float = 0.2  # the p of a bernoulli distribution
     recovery_p: float = 0.1  # the p of a bernoulli distribution 
     starting_sick: int = 10
 
     # behaviors
     maximum_gathering: int = 10  # the number of children per node in space partitioning algorithm
-    grocery_frequency_mean: float = 0.2
-    grocery_frequency_stddev: float = 0.05
+    grocery_frequency_mean: float = 1/28
+    grocery_frequency_stddev: float = 1/14
     time_at_grocery: int = 1
     distancing_alpha: float = 2  # the exponential parameter to a pareto law distribution
 
@@ -54,20 +59,32 @@ class Simulation(metaclass=ABCMeta):
             self.tqdm = lambda iterable, *args, **kwargs: iterable
 
 
-    def run(self):
-        self.init()
+    def setup_animation(self):
+        self.img = plt.imread("cville.png")
+        self.fig = plt.figure()
+        self.fig.set_dpi(100)
+        self.fig.set_size_inches(7, 6.5)
+        ax = plt.axes(xlim=(0,self.width),ylim=(0,self.width))
+        xs = [p.location.x for p in self.people]
+        ys = [p.location.y for p in self.people]
+        self.scatter=ax.scatter(xs, ys)
+
+    def choose_initial_sick(self):
         initial_sick = choices(self.people, k=self.starting_sick) 
         for p in initial_sick:
             p.state = PersonState.ASYMPT
+
+    def run(self):
+        self.init()
+        self.setup_animation()
+        self.choose_initial_sick()
         self.print_state()
         for _ in range(self.num_trials):
             self.update()
-            if self.output_state:
-                self.print_state()
             if self.asymptomatic_count + self.sick_count == 0:
                 break
 
-    def update(self):
+    def update(self, _):
         for field in fields(self):
             attr = getattr(self, field.name)
             if isinstance(attr, list) and attr and isinstance(attr[0], SimulationComponent):
@@ -77,6 +94,14 @@ class Simulation(metaclass=ABCMeta):
         for p in to_be_sick:
             p.state = PersonState.ASYMPT
         self.fix_people_out_of_bounds()
+        if self.output_state:
+            self.print_state()
+
+        xs = [p.location.x for p in self.people]
+        ys = [p.location.y for p in self.people]
+        self.scatter.set_offsets(np.c_[xs, ys])
+        print(np.c_[xs, ys])
+        return self.scatter,  
 
     
     @property

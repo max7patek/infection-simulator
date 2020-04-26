@@ -59,8 +59,9 @@ fig.set_dpi(100)
 fig.set_size_inches(7, 6.5)
 
 coordinate_data = get_x_y_data(get_coordinates())
-house_x_data = coordinate_data[0]
+house_x_data = coordinate_data[0] # [0.2, 0.4, ...]
 house_y_data = coordinate_data[1]
+
 
 ax = plt.axes(xlim=(MIN_X,MAX_X),ylim=(MIN_Y,MAX_Y))
 
@@ -71,7 +72,7 @@ def animate(i):
     global house_x_data, house_y_data
     house_y_data = [i + random.uniform(-.001, .001) for i in house_y_data]
 
-    scatter.set_offsets(np.c_[house_x_data, house_y_data])
+    scatter.set_offsets(np.c_[house_x_data, house_y_data]) # returns [[x1,y1],[x2,y2]]
     return scatter, 
 
 anim = FuncAnimation(fig, animate, 
