@@ -48,40 +48,38 @@ def get_x_y_data(coordinate_list):
 import matplotlib.pyplot as plt 
 from matplotlib.animation import FuncAnimation
 import numpy as np
+import random
+from scipy.misc import imread
 
-dt = 0.005
-n=20
-L = 1
 
-houses=np.zeros(n,dtype=[("position", float , 2),
-                            ("velocity", float ,2),
-                            ("force", float ,2),
-                            ("size", float , 1)])
+img = imread("image.png")
 
-# houses["position"]=np.random.uniform(0,L,(n,2))
-# houses["velocity"]=np.zeros((n,2))
-# houses["size"]=0.5*np.ones(n)
+fig = plt.figure()
+fig.set_dpi(100)
+fig.set_size_inches(7, 6.5)
 
 coordinate_data = get_x_y_data(get_coordinates())
 house_x_data = coordinate_data[0]
 house_y_data = coordinate_data[1]
 
-fig = plt.figure(figsize=(7,7))
 ax = plt.axes(xlim=(MIN_X,MAX_X),ylim=(MIN_Y,MAX_Y))
 
-# print(houses["position"][:,0])
 
 scatter=ax.scatter(house_x_data, house_y_data)
 
-def update(frame_number):
-    # houses["force"]=np.random.uniform(-2,2.,(n,2))
-    # houses["velocity"] = houses["velocity"] + houses["force"]*dt
-    # houses["position"] = houses["position"] + houses["velocity"]*dt
+def animate(i):
+    global house_x_data, house_y_data
+    house_y_data = [i + random.uniform(-.001, .001) for i in house_y_data]
 
-    # houses["position"] = houses["position"]%L
-    # scatter.set_offsets(houses["position"])
-    # return scatter, 
-    return
+    scatter.set_offsets(np.c_[house_x_data, house_y_data])
+    return scatter, 
 
-anim = FuncAnimation(fig, update, interval=10)
-plt.show() 
+anim = FuncAnimation(fig, animate, 
+                               frames=360, 
+                               interval=20,
+                               blit=True)
+
+plt.imshow(img,zorder=0,  extent=[0.1, 20.0, 0.1, 20.0])
+# anim.save('the_movie.mp4', writer = 'ffmpeg', fps=30)
+plt.show()
+
