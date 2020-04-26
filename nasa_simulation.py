@@ -3,17 +3,24 @@
 from simulation import Simulation, Location
 from collections import namedtuple
 from dataclasses import dataclass, field
+from random import gauss
 from typing import Tuple, List
 from types import SimpleNamespace
 import csv
 
 
-Centroid = namedtuple("Centroid", ["loc", "num"])
+#Centroid = namedtuple("Centroid", ["loc", "num", "density"])
+
+@dataclass
+class Centroid:
+    loc: Location
+    num: int
+    area: float
 
 def _process_row(line, headers):
     def _process_pair(pair):
         key, val = pair
-        if key.endswith("_KM") or key.endswith("_X") or key.endswith("_Y"):
+        if any(key.endswith(x) for x in ("_KM", "_X", "_Y", "_DS")):
             val = float(val)
         else:
             try:
@@ -31,7 +38,8 @@ def remap(old, old_min, old_max, new_min, new_max):
 @dataclass
 class NasaSimulation(Simulation):
     filename: str = ""
-    centroids: List[Centroid] = field(default_factory=list)
+    people_per_home_mean: float = 3
+    people_per_home_stddev: float = 1
 
     def init(self):
         assert self.filename, "Must supply population data csv filename"
@@ -56,27 +64,34 @@ class NasaSimulation(Simulation):
         else:
             max_x = min_x + max_y - min_y
         
+        centroids = []
         for row in rows:
             if row.UN_2020_E:
-                self.centroids.append(
+                centroids.append(
                     Centroid(
                         Location(
                             remap(row.CENTROID_X, min_x, max_x, 0, self.width),
                             remap(row.CENTROID_Y, min_y, max_y, 0, self.width),
                         ),
                         row.UN_2020_E,
+                        row.LAND_A_KM,
                     )
                 )
-        self.groceries.append(self.Grocery.init(Location(1, 1)))
-        for centroid in self.centroids:
-            self.homes.append(self.Home.init(centroid.loc, centroid.num))
 
-#         last = None
-#         for row in sorted(rows, key=lambda row: row.CENTROID_X):
-# #            print(f"{row.CENTROID_X:.5f}, {row.CENTROID_Y:.5f}")
-#             if last:
-#                 print(f"{row.CENTROID_X - last.CENTROID_X:.5f}")
-#             last = row
+        self.groceries.append(self.Grocery.init(Location(1, 1)))
+        for centroid in centroids:
+            while centroid.num > 0:
+                num_people = round(gauss(
+                    self.people_per_home_mean, 
+                    self.people_per_home_stddev,
+                ))
+                num_people = min(num_people, centroid.num)
+                centroid.num -= num_people
+                noise = Location(gauss(0, 1/centroid.density), gauss(0, centroid.density))
+                home = self.Home.init(centroid.loc + noise, num_people)
+                self.bound_loc(home)
+                self.homes.append(home)
+
 
     @dataclass
     class Home(Location):
