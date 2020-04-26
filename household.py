@@ -76,10 +76,10 @@ def animate(i):
 
 anim = FuncAnimation(fig, animate, 
                                frames=360, 
-                               interval=20,
+                               interval=200,
                                blit=True)
 
 plt.imshow(img,zorder=0,  extent=[MIN_X, MAX_X, MIN_Y, MAX_Y])
-# anim.save('the_movie.mp4', writer = 'ffmpeg', fps=30)
+# anim.save('animation.mp4', writer = 'ffmpeg', fps=30)
 plt.show()
 
