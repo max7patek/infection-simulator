@@ -7,7 +7,9 @@ from random import gauss
 from typing import Tuple, List
 from types import SimpleNamespace
 import csv
-
+import matplotlib.pyplot as plt 
+from matplotlib.animation import FuncAnimation
+import numpy as np
 
 #Centroid = namedtuple("Centroid", ["loc", "num", "density"])
 
@@ -74,7 +76,7 @@ class NasaSimulation(Simulation):
                             remap(row.CENTROID_Y, min_y, max_y, 0, self.width),
                         ),
                         row.UN_2020_E,
-                        row.LAND_A_KM,
+                        row.LAND_A_KM*400,
                     )
                 )
 
@@ -87,7 +89,7 @@ class NasaSimulation(Simulation):
                 ))
                 num_people = min(num_people, centroid.num)
                 centroid.num -= num_people
-                noise = Location(gauss(0, 1/centroid.density), gauss(0, centroid.density))
+                noise = Location(gauss(0, centroid.area), gauss(0, centroid.area))
                 home = self.Home.init(centroid.loc + noise, num_people)
                 self.bound_loc(home)
                 self.homes.append(home)
@@ -115,5 +117,20 @@ class NasaSimulation(Simulation):
 
 if __name__ == "__main__":
     sim = NasaSimulation(filename="CharlottesvillePopulationData.csv", output_progress_bars=True)
-    sim.run()
+    sim.init()
+    sim.setup_animation()
+    sim.choose_initial_sick()
+
+    anim = FuncAnimation(
+        sim.fig, 
+        sim.update, 
+        frames=360, 
+        interval=200,
+        blit=True,
+    )
+
+    plt.imshow(sim.img, zorder=0,  extent=[0, sim.width, 0, sim.width])
+    #anim.save('animation.mp4', writer = 'ffmpeg', fps=30)
+    plt.show()
+    #sim.run()
 

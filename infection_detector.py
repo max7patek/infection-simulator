@@ -80,9 +80,7 @@ def detect(simulation):
         for i, h in product(infected, healthy):
             dist = i.location.distance(h.location)
             infection_probability = abs(
-                simulation.spread_multiplier * gauss(
-                    0, simulation.spread_radius
-                )
+                gauss(0, simulation.spread_radius)
             )
             if dist < infection_probability:
                 to_be_sick.append(h)
