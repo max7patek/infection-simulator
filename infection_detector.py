@@ -30,17 +30,18 @@ class Node:
     def pockets(self, stack=None):
         stack = stack or []
         if not self.full():
-            yield [c.representative for c in self.children if c] + stack
+            yield [c.representative for c in self.children if c] + stack + [self.representative]
         else:
             stack.append(self.representative)
             for child in self.children:
-                yield from child.pockets(stack)
+                for pocket in child.pockets(stack):
+                    yield pocket
             stack.pop()
 
     def find_pocket(self, p, stack=None):
         stack = stack or []
         if not self.full():
-            yield from [c.representative for c in self.children if c] + stack
+            yield [c.representative for c in self.children if c] + stack
         else:
             stack.append(self.representative)
             child = self.find_partition(p)
@@ -77,11 +78,15 @@ def detect(simulation):
             if p.state in (PersonState.SICK, PersonState.ASYMPT)
         )
         healthy = (p for p in pocket if p.state == PersonState.HEALTHY)
+#        print(f"Bout to loop {len(pocket)}")
         for i, h in product(infected, healthy):
+#            print("calculaitng distance")
             dist = i.location.distance(h.location)
+ #           print("calculaitng gauss")
             infection_probability = abs(
                 gauss(0, simulation.spread_radius)
             )
+  #          print("appending")
             if dist < infection_probability:
                 to_be_sick.append(h)
     return to_be_sick
