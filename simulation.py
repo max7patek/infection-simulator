@@ -30,6 +30,8 @@ class Simulation(AbstractSimulation):
     people: List[AbstractPerson] = field(default_factory=list)
     homes: List[Location] = field(default_factory=list)
     groceries: List[Location] = field(default_factory=list)
+    r_t: List[float] = field(default_factory=list)
+    new_cases_t: List[int] = field(default_factory=list)
 
     # disease spread
     spread_radius: float = .75  # the std-dev of a bell curve
@@ -76,6 +78,8 @@ class Simulation(AbstractSimulation):
         self.visible_people = [p for p in self.people if random() < self.fraction_people_show]
         xs, ys, cs = self.get_xs_ys_cs()
         self.scatter=ax.scatter(xs, ys, s=1, c=cs)
+        plt.xlabel("meters")
+        plt.ylabel("meters")
 
     def choose_initial_sick(self):
         initial_sick = choices(self.people, k=self.starting_sick) 
@@ -93,14 +97,28 @@ class Simulation(AbstractSimulation):
                 break
 
     def update(self, _):
+        prior_sick = self.asymptomatic_count + self.sick_count
+
         for field in fields(self):
             attr = getattr(self, field.name)
             if isinstance(attr, list) and attr and isinstance(attr[0], SimulationComponent):
                 for comp in attr:
                     comp.update()
+        sick_post_recorvery = self.asymptomatic_count + self.sick_count
         to_be_sick = infection_detector.detect(self)
         for p in to_be_sick:
             p.state = PersonState.ASYMPT
+
+        new_sick = self.asymptomatic_count + self.sick_count
+        print(f"{prior_sick=}, {new_sick=}")
+        if prior_sick == 0:
+            R = 0
+        else:
+            R = new_sick / prior_sick
+        self.r_t.append(R)
+        new_cases = new_sick - sick_post_recorvery
+        self.new_cases_t.append(new_cases)
+
         self.fix_people_out_of_bounds()
         if self.output_state:
             self.print_state()
@@ -184,7 +202,9 @@ class Simulation(AbstractSimulation):
         def get_next_loc(self) -> Location:
             if self.state in (PersonState.HEALTHY, PersonState.ASYMPT):
                 if roll(self.grocery_frequency):
-                    return self.closest_grocery # TODO: add some area to the grocery
+                    g = self.closest_grocery
+                    noise = Location(uniform(g.x - 30, g.x+30), uniform(g.y - 30, g.y+30))
+                    return self.closest_grocery + noise # TODO: add some area to the grocery
                 if roll(self.distancing_factor):
                     return self.simulation.get_random_location()
                 if self.location.distance(self.home) > self.simulation.random_walk_limit:

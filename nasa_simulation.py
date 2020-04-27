@@ -1,10 +1,11 @@
 
 
-from simulation import Simulation, Location, AbstractPerson
+from simulation import Simulation, Location, AbstractPerson, roll
 from simulation_abcs import PersonState
 from collections import namedtuple
 from enum import Enum
 from dataclasses import dataclass, field
+from datetime import datetime
 from random import gauss, choices, triangular
 from typing import Tuple, List, Optional
 from types import SimpleNamespace
@@ -75,6 +76,7 @@ class NasaSimulation(Simulation):
     people_per_home_mean: float = 3
     people_per_home_stddev: float = 1
     campus_centroids: List[UnivCentroid] = field(default_factory=list)
+    grocery_coords: List[Tuple[float, float]] = field(default_factory=list)
 
     num_students_off_campus: int = 0
     include_students: bool = True
@@ -111,7 +113,16 @@ class NasaSimulation(Simulation):
             pass # TODO remove off campus sutdents
             
 
-        self.groceries.append(self.Grocery.init(Location(1, 1)))
+        #self.groceries.append(self.Grocery.init(Location(1, 1)))
+        print(self.grocery_coords)
+        for g in self.grocery_coords:
+            loc = Location(
+                remap(g[1], min_x, max_x, 0, self.width),
+                remap(g[0], min_y, max_y, 0, self.width),
+            )
+            self.groceries.append(self.Grocery.init(loc))
+            print(loc)
+        
         for centroid in centroids:
             while centroid.num > 0:
                 self.Home.init(centroid)
@@ -175,10 +186,16 @@ class NasaSimulation(Simulation):
     def get_xs_ys_cs(self):
         xs, ys, cs = super().get_xs_ys_cs()
         def p_to_c(p):
-            if p.state in (PersonState.SICK, PersonState.ASYMPT):
+            if p.state == PersonState.ASYMPT:
                 return (1, 0, 0)
+            if p.state == PersonState.SICK:
+                return (1, .4, 0)
             if p.state == PersonState.REMOVED:
-                return (0, 0, 0)
+                if p.dead:
+                    return (0, 0, 0)
+                else:
+                    return (.4,.4,.4)
+#            return ()
             return (0, 1-p.age/90, p.age/90)
         return xs, ys, list(map(p_to_c, self.visible_people))
 
@@ -186,6 +203,35 @@ class NasaSimulation(Simulation):
     @dataclass
     class Person(AbstractPerson):
         age: int
+        dead: bool = False
+
+        def update(self):
+            state = self.state
+            super().update()
+            dead = self.dead
+            if state != PersonState.REMOVED and self.state == PersonState.REMOVED:
+                if self.age >= 80:
+                    if roll(.148):
+                        self.dead = True
+                elif self.age >= 70:
+                    if roll(.08):
+                        self.dead = True
+                elif self.age >= 60:
+                    if roll(.036):
+                        self.dead = True
+                elif self.age >= 50:
+                    if roll(0.013):
+                        self.dead = True
+                elif self.age >= 40:
+                    if roll(0.004):
+                        self.dead = True
+                else:
+                    if roll(0.002):
+                        self.dead = True
+            if not dead and self.dead:
+                print("DEATH")
+
+                
 
         @classmethod
         def init(cls, home, centroid):
@@ -284,15 +330,29 @@ if __name__ == "__main__":
                 area=200,
             ),
         ]
+    groceries = [
+        (38.053540, -78.500610), #Kroger
+        (38.059880, -78.491700), #Kroger
+        (38.009030, -78.500500), #Wegmans
+        (38.013140, -78.502760), #Food Lion
+        (38.0014282, -78.4964649), #Food Lion
+        (38.029985281465876, -78.45825010512779), #Food Lion
+        (38.053540, -78.500610), #Walmart
+        (38.0596895, -78.4892307), #Whole Foods
+        (38.0500364,-78.5042732), #Harris Teeter
+        (38.0629873, -78.4914987), #Trader Joe’s
+    ]
+    
     off_campus_pop = uva_pop - sum(c.num for c in campus_centroids)
     sim = NasaSimulation(
-        num_people_fraction=1,
-        fraction_people_show=.2,
-        starting_sick=100,
+        num_people_fraction=.5,
+        fraction_people_show=.5,
+        starting_sick=1000,
         include_students=True,
         num_students_off_campus=off_campus_pop,
         campus_centroids=campus_centroids,
-        grocery_frequency_mean=1/10000
+        output_state=False,
+        grocery_coords=groceries,
     )
     sim.init()
     sim.setup_animation()
@@ -307,7 +367,43 @@ if __name__ == "__main__":
     )
 
     plt.imshow(sim.img, zorder=0,  extent=[0, sim.width, 0, sim.width])
-    anim.save('sunday-with-students.mp4', fps=20, extra_args=['-vcodec', 'libx264'])
-    #plt.show()
+    filename = f"RUN{datetime.timestamp(datetime.now())}"
+
+    #anim.save(f'{filename}.mp4', fps=10, extra_args=['-vcodec', 'libx264'])
+    plt.show()
+
+
+    if len(sim.r_t)%2: # odd
+        sim.r_t.pop()
+
+    daily_rs = [
+        (a + b) / 2 for a, b in zip(
+            sim.r_t[0::2],
+            sim.r_t[1::2],
+        )
+    ]
+    plt.plot(daily_rs)
+    plt.xlabel("days")
+    plt.ylabel("R")
+    plt.title("Reproductive Number Over Time")
+    plt.savefig(f"{filename}_R.png")
+    plt.show()
+
+    if len(sim.new_cases_t)%2: # odd
+        sim.new_cases_t.pop()
+
+    daily_new_cases = [
+        a + b for a, b in zip(
+            sim.new_cases_t[0::2],
+            sim.new_cases_t[1::2],
+        )
+    ]
+    plt.plot(daily_new_cases)
+    plt.xlabel("days")
+    plt.ylabel("new cases")
+    plt.title("New Cases Per Day Over Time")
+    plt.savefig(f"{filename}_new_cases.png")
+    plt.show()
     #sim.run()
+    print("DEATHS:",sum(1 for p in sim.people if p.dead))
 
