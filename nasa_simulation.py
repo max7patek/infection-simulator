@@ -36,6 +36,13 @@ AGE_RANGES=[
     (85, 90),
 ]
 
+@dataclass
+class UnivCentroid:
+    lat: float
+    lon: float
+    num: int
+    area: float
+
 
 @dataclass
 class Centroid:
@@ -64,10 +71,13 @@ def remap(old, old_min, old_max, new_min, new_max):
 
 @dataclass
 class NasaSimulation(Simulation):
-    filename: str = ""
+    filename: str = "CharlottesvillePopulationData.csv"
     people_per_home_mean: float = 3
     people_per_home_stddev: float = 1
-    university_lat_lon: Optional[Tuple[float, float]] = None
+    campus_centroids: List[UnivCentroid] = field(default_factory=list)
+
+    num_students_off_campus: int = 0
+    include_students: bool = True
 
     num_people_fraction: float = 1
 
@@ -94,6 +104,39 @@ class NasaSimulation(Simulation):
         else:
             max_x = min_x + max_y - min_y
         
+        centroids = self.controids_from_rows(rows, min_x, max_x, min_y, max_y)
+        if self.include_students:
+            centroids.extend(self.convert_univ_centroids(self.campus_centroids, min_x, max_x, min_y, max_y))            
+        else:
+            pass # TODO remove off campus sutdents
+            
+
+        self.groceries.append(self.Grocery.init(Location(1, 1)))
+        for centroid in centroids:
+            while centroid.num > 0:
+                self.Home.init(centroid)
+
+    def remove_off_campus(self):
+        for centroid in sorted(centroids):
+            pass
+
+    def convert_univ_centroids(self, univ_centroids, min_x, max_x, min_y, max_y):
+        centroids = []
+        for uc in univ_centroids:
+            centroids.append(
+                Centroid(
+                    Location(
+                        remap(uc.lon, min_x, max_x, 0, self.width),
+                        remap(uc.lat, min_y, max_y, 0, self.width),
+                    ),
+                    round(uc.num * self.num_people_fraction),
+                    uc.area,
+                    age_range_totals=[0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,],
+                )
+            )
+        return centroids
+
+    def controids_from_rows(self, rows, min_x, max_x, min_y, max_y):
         centroids = []
         for row in rows:
             if row.UN_2020_E:
@@ -127,11 +170,7 @@ class NasaSimulation(Simulation):
                         ],
                     )
                 )
-
-        self.groceries.append(self.Grocery.init(Location(1, 1)))
-        for centroid in centroids:
-            while centroid.num > 0:
-                self.Home.init(centroid)
+        return centroids
 
     def get_xs_ys_cs(self):
         xs, ys, cs = super().get_xs_ys_cs()
@@ -206,13 +245,54 @@ class NasaSimulation(Simulation):
 
 
 if __name__ == "__main__":
+    uva_pop = 16655
+    campus_centroids = [
+            UnivCentroid(# Gooch Dillard
+                lat=38.029622,
+                lon=-78.517580,
+                num=round(uva_pop / 4 / 3),
+                area=100,
+            ),
+            UnivCentroid( # Ohill
+                lat=38.034270, 
+                lon=-78.515764,
+                num=round(uva_pop / 4 / 3),
+                area=100,
+            ),
+            UnivCentroid(  # old dorms
+                lat=38.035040, 
+                lon=-78.510672,
+                num=round(uva_pop / 4 / 3),
+                area=100,
+            ),
+            UnivCentroid( # lawn
+                lat=38.034533, 
+                lon=-78.503991,
+                num=200,
+                area=100,
+            ),
+            UnivCentroid( # lambeth
+                lat=38.041763, 
+                lon=-78.504286,
+                num=round(uva_pop / 4 / 3),
+                area=100,
+            ),
+            UnivCentroid( # North Grounds
+                lat=38.047359, 
+                lon=-78.509730,
+                num=round(uva_pop / 4 / 4),
+                area=200,
+            ),
+        ]
+    off_campus_pop = uva_pop - sum(c.num for c in campus_centroids)
     sim = NasaSimulation(
-        filename="CharlottesvillePopulationData.csv", 
-        university_lat_lon=(38.033606, -78.507932), 
-        output_progress_bars=True,
-        num_people_fraction=.05,
-        fraction_people_show=1,
-        starting_sick=100
+        num_people_fraction=1,
+        fraction_people_show=.2,
+        starting_sick=100,
+        include_students=True,
+        num_students_off_campus=off_campus_pop,
+        campus_centroids=campus_centroids,
+        grocery_frequency_mean=1/10000
     )
     sim.init()
     sim.setup_animation()
@@ -227,7 +307,7 @@ if __name__ == "__main__":
     )
 
     plt.imshow(sim.img, zorder=0,  extent=[0, sim.width, 0, sim.width])
-    anim.save('animation.mp4', fps=30, extra_args=['-vcodec', 'libx264'])
-    plt.show()
+    anim.save('sunday-with-students.mp4', fps=20, extra_args=['-vcodec', 'libx264'])
+    #plt.show()
     #sim.run()
 

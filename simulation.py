@@ -32,7 +32,7 @@ class Simulation(AbstractSimulation):
     groceries: List[Location] = field(default_factory=list)
 
     # disease spread
-    spread_radius: float = 1  # the std-dev of a bell curve
+    spread_radius: float = .75  # the std-dev of a bell curve
     symptom_onset_p: float = 1/10  # the p of a bernoulli distribution
     recovery_p: float = 1/30  # the p of a bernoulli distribution 
     starting_sick: int = 10
@@ -41,7 +41,7 @@ class Simulation(AbstractSimulation):
     maximum_gathering: int = 10  # the number of children per node in space partitioning algorithm
     grocery_frequency_mean: float = 1/14
     grocery_frequency_stddev: float = 1/14
-    random_walk_stddev: float = 8
+    random_walk_stddev: float = 5
     random_walk_limit: float = 1000
     distancing_exp: float = 6  # the exponent of distancing willingness, higher is more distancing
 
