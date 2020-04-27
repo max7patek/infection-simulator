@@ -1,10 +1,10 @@
 
-from dataclasses import dataclass, fields, field
+from dataclasses import dataclass, fields, field, make_dataclass
 from enum import Enum
 import math
 from typing import List
 from abc import ABCMeta, abstractmethod
-
+from functools import lru_cache
 
 
 class PersonState(Enum):
@@ -21,10 +21,19 @@ class SimulationComponentMeta(ABCMeta):
     def __get__(cls, sim, type=None):
         if sim is None:
             return cls
-        class New(cls):
-            simulation = sim
-        sim.__dict__[cls._name] = New 
-        return New
+        bases = (cls,) + tuple(
+            getattr(sup, cls._name) 
+            for sup in sim.__class__.__bases__ 
+            if hasattr(sup, cls._name)
+        )
+        new_type = make_dataclass(
+            cls._name, 
+            (("simulation", AbstractSimulation, sim),), 
+            bases=bases,
+            unsafe_hash=any(issubclass(b, Location) for b in bases), 
+        )
+        sim.__dict__[cls._name] = new_type
+        return new_type
 
 
 class SimulationComponent(metaclass=SimulationComponentMeta):
@@ -56,3 +65,6 @@ class Location(SimulationComponent):
     def __add__(self, other):
         return Location(self.x + other.x, self.y + other.y)
 
+
+class AbstractSimulation(metaclass=ABCMeta):
+    pass

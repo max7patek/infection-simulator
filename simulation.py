@@ -5,7 +5,7 @@ from typing import List
 from abc import ABCMeta, abstractmethod
 import infection_detector
 from random import random, gauss, paretovariate, uniform, choices, triangular
-from simulation_abcs import AbstractPerson, Location, PersonState, SimulationComponent
+from simulation_abcs import AbstractPerson, Location, PersonState, SimulationComponent, AbstractSimulation
 from tqdm import tqdm
 
 import matplotlib.pyplot as plt 
@@ -25,29 +25,31 @@ def roll(p):
 
 
 @dataclass
-class Simulation(metaclass=ABCMeta):
+class Simulation(AbstractSimulation):
     # containers
     people: List[AbstractPerson] = field(default_factory=list)
     homes: List[Location] = field(default_factory=list)
     groceries: List[Location] = field(default_factory=list)
 
     # disease spread
-    spread_radius: float = .75  # the std-dev of a bell curve
-    symptom_onset_p: float = 0.2  # the p of a bernoulli distribution
-    recovery_p: float = 0.1  # the p of a bernoulli distribution 
+    spread_radius: float = 1  # the std-dev of a bell curve
+    symptom_onset_p: float = 1/10  # the p of a bernoulli distribution
+    recovery_p: float = 1/30  # the p of a bernoulli distribution 
     starting_sick: int = 10
 
     # behaviors
     maximum_gathering: int = 10  # the number of children per node in space partitioning algorithm
-    grocery_frequency_mean: float = 1/28
+    grocery_frequency_mean: float = 1/14
     grocery_frequency_stddev: float = 1/14
-    time_at_grocery: int = 1
-    distancing_alpha: float = 2  # the exponential parameter to a pareto law distribution
+    random_walk_stddev: float = 8
+    random_walk_limit: float = 1000
+    distancing_exp: float = 6  # the exponent of distancing willingness, higher is more distancing
 
     # parameters
     num_trials: int = 100
     output_state: bool = True
     output_progress_bars: bool = True
+    fraction_people_show: float = 0.1
     width: int = 1000
 
 
@@ -59,10 +61,11 @@ class Simulation(metaclass=ABCMeta):
             self.tqdm = lambda iterable, *args, **kwargs: iterable
 
 
-    def get_xs_ys(self):
+    def get_xs_ys_cs(self):
         xs = [p.location.x for p in self.visible_people]
         ys = [p.location.y for p in self.visible_people] 
-        return xs, ys
+        cs = [(1, 0, 0,) for p in self.visible_people]
+        return xs, ys, cs
 
     def setup_animation(self):
         self.img = plt.imread("cville.png")
@@ -70,9 +73,9 @@ class Simulation(metaclass=ABCMeta):
         self.fig.set_dpi(100)
         self.fig.set_size_inches(7, 6.5)
         ax = plt.axes(xlim=(0,self.width),ylim=(0,self.width))
-        self.visible_people = [p for p in self.people if random() < 0.1]
-        xs, ys = self.get_xs_ys()
-        self.scatter=ax.scatter(xs, ys, s=1, c="r")
+        self.visible_people = [p for p in self.people if random() < self.fraction_people_show]
+        xs, ys, cs = self.get_xs_ys_cs()
+        self.scatter=ax.scatter(xs, ys, s=1, c=cs)
 
     def choose_initial_sick(self):
         initial_sick = choices(self.people, k=self.starting_sick) 
@@ -85,7 +88,7 @@ class Simulation(metaclass=ABCMeta):
         self.choose_initial_sick()
         self.print_state()
         for _ in range(self.num_trials):
-            self.update()
+            self.update(None)
             if self.asymptomatic_count + self.sick_count == 0:
                 break
 
@@ -102,8 +105,9 @@ class Simulation(metaclass=ABCMeta):
         if self.output_state:
             self.print_state()
 
-        xs, ys = self.get_xs_ys()
+        xs, ys, cs = self.get_xs_ys_cs()
         self.scatter.set_offsets(np.c_[xs, ys])
+        self.scatter.set_color(cs)
         return self.scatter,  
 
     
@@ -167,6 +171,7 @@ class Simulation(metaclass=ABCMeta):
             return self.location == self.home
 
         def update(self):
+            self.location.update()
             self.location = self.get_next_loc()
             if self.state == PersonState.SICK:
                 if roll(self.simulation.recovery_p):
@@ -177,19 +182,18 @@ class Simulation(metaclass=ABCMeta):
             
 
         def get_next_loc(self) -> Location:
-            # TODO: make stay at grocery store for time_at_grocery
             if self.state in (PersonState.HEALTHY, PersonState.ASYMPT):
                 if roll(self.grocery_frequency):
-                    #print("Going to the grocery store")
                     return self.closest_grocery # TODO: add some area to the grocery
                 if roll(self.distancing_factor):
-                    #print("Not distancing")
                     return self.simulation.get_random_location()
-                TURF = 2
-                if self.location.distance(self.home) > TURF:
-                    #print("wondered to far, returning")
+                if self.location.distance(self.home) > self.simulation.random_walk_limit:
                     return self.home
-                return self.location + Location(gauss(0, 1), gauss(0, 1))
+                walk_noise = Location(
+                    gauss(0, self.simulation.random_walk_stddev), 
+                    gauss(0, self.simulation.random_walk_stddev),
+                )
+                return self.location + walk_noise
             else: # sick
                 return self.home
             
@@ -200,8 +204,7 @@ class Simulation(metaclass=ABCMeta):
                 cls.simulation.grocery_frequency_mean, 
                 cls.simulation.grocery_frequency_stddev
             )
-            #distancing_factor = paretovariate(cls.simulation.distancing_alpha)
-            distancing_factor = triangular(0, 1, 0)**10
+            distancing_factor = triangular(0, 1, 0)**self.simulation.distancing_exp
             closest_grocery = min(
                 cls.simulation.groceries, 
                 key=home.distance,
