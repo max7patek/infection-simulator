@@ -76,6 +76,7 @@ class NasaSimulation(Simulation):
     people_per_home_mean: float = 3
     people_per_home_stddev: float = 1
     campus_centroids: List[UnivCentroid] = field(default_factory=list)
+    university_centroid: Tuple[float, float] = (0,0)
     grocery_coords: List[Tuple[float, float]] = field(default_factory=list)
 
     num_students_off_campus: int = 0
@@ -101,31 +102,46 @@ class NasaSimulation(Simulation):
         self.width = (max_y - min_y) * METERS_PER_DEGREE
 
         # garauntee square
-        if max_x - min_x > max_y - min_y:
-            max_y = min_y + max_x - min_x
-        else:
-            max_x = min_x + max_y - min_y
+        # if max_x - min_x > max_y - min_y: COMMENTED OUT TO MATCH CVILLE SCREENSHOT
+        #     #min_y = max_y - (max_x - min_x)
+        #     max_y = min_y + max_x - min_x
+        # else:
+        #     #min_x = max_x - (max_y - min_y)
+        #     max_x = min_x + max_y - min_y
         
         centroids = self.controids_from_rows(rows, min_x, max_x, min_y, max_y)
         if self.include_students:
             centroids.extend(self.convert_univ_centroids(self.campus_centroids, min_x, max_x, min_y, max_y))            
-        else:
-            pass # TODO remove off campus sutdents
+
             
 
-        #self.groceries.append(self.Grocery.init(Location(1, 1)))
-        print(self.grocery_coords)
         for g in self.grocery_coords:
             loc = Location(
                 remap(g[1], min_x, max_x, 0, self.width),
                 remap(g[0], min_y, max_y, 0, self.width),
             )
             self.groceries.append(self.Grocery.init(loc))
-            print(loc)
         
         for centroid in centroids:
             while centroid.num > 0:
                 self.Home.init(centroid)
+
+        if not self.include_students:
+            num_to_remove = round(self.num_students_off_campus * self.num_people_fraction)
+            univ_center = Location(
+                remap(self.university_centroid[1], min_x, max_x, 0, self.width),
+                remap(self.university_centroid[0], min_y, max_y, 0, self.width),
+            )
+            def student_likelyhood(p):
+                if p.age < 18 or p.age > 22:
+                    return 0 # verrry unlikely
+                return 1/univ_center.distance(p.location) # less dist -> more likely
+
+            self.people.sort(key=student_likelyhood)
+            for _ in self.tqdm(range(num_to_remove)):
+                #print(f"removing student of age {self.people[-1].age}")
+                self.people.pop()
+
 
     def remove_off_campus(self):
         for centroid in sorted(centroids):
@@ -288,122 +304,4 @@ class NasaSimulation(Simulation):
 
 
 
-
-
-if __name__ == "__main__":
-    uva_pop = 16655
-    campus_centroids = [
-            UnivCentroid(# Gooch Dillard
-                lat=38.029622,
-                lon=-78.517580,
-                num=round(uva_pop / 4 / 3),
-                area=100,
-            ),
-            UnivCentroid( # Ohill
-                lat=38.034270, 
-                lon=-78.515764,
-                num=round(uva_pop / 4 / 3),
-                area=100,
-            ),
-            UnivCentroid(  # old dorms
-                lat=38.035040, 
-                lon=-78.510672,
-                num=round(uva_pop / 4 / 3),
-                area=100,
-            ),
-            UnivCentroid( # lawn
-                lat=38.034533, 
-                lon=-78.503991,
-                num=200,
-                area=100,
-            ),
-            UnivCentroid( # lambeth
-                lat=38.041763, 
-                lon=-78.504286,
-                num=round(uva_pop / 4 / 3),
-                area=100,
-            ),
-            UnivCentroid( # North Grounds
-                lat=38.047359, 
-                lon=-78.509730,
-                num=round(uva_pop / 4 / 4),
-                area=200,
-            ),
-        ]
-    groceries = [
-        (38.053540, -78.500610), #Kroger
-        (38.059880, -78.491700), #Kroger
-        (38.009030, -78.500500), #Wegmans
-        (38.013140, -78.502760), #Food Lion
-        (38.0014282, -78.4964649), #Food Lion
-        (38.029985281465876, -78.45825010512779), #Food Lion
-        (38.053540, -78.500610), #Walmart
-        (38.0596895, -78.4892307), #Whole Foods
-        (38.0500364,-78.5042732), #Harris Teeter
-        (38.0629873, -78.4914987), #Trader Joe’s
-    ]
-    
-    off_campus_pop = uva_pop - sum(c.num for c in campus_centroids)
-    sim = NasaSimulation(
-        num_people_fraction=.5,
-        fraction_people_show=.5,
-        starting_sick=1000,
-        include_students=True,
-        num_students_off_campus=off_campus_pop,
-        campus_centroids=campus_centroids,
-        output_state=False,
-        grocery_coords=groceries,
-    )
-    sim.init()
-    sim.setup_animation()
-    sim.choose_initial_sick()
-
-    anim = FuncAnimation(
-        sim.fig, 
-        sim.update, 
-        frames=360, 
-        interval=200,
-        blit=True,
-    )
-
-    plt.imshow(sim.img, zorder=0,  extent=[0, sim.width, 0, sim.width])
-    filename = f"RUN{datetime.timestamp(datetime.now())}"
-
-    #anim.save(f'{filename}.mp4', fps=10, extra_args=['-vcodec', 'libx264'])
-    plt.show()
-
-
-    if len(sim.r_t)%2: # odd
-        sim.r_t.pop()
-
-    daily_rs = [
-        (a + b) / 2 for a, b in zip(
-            sim.r_t[0::2],
-            sim.r_t[1::2],
-        )
-    ]
-    plt.plot(daily_rs)
-    plt.xlabel("days")
-    plt.ylabel("R")
-    plt.title("Reproductive Number Over Time")
-    plt.savefig(f"{filename}_R.png")
-    plt.show()
-
-    if len(sim.new_cases_t)%2: # odd
-        sim.new_cases_t.pop()
-
-    daily_new_cases = [
-        a + b for a, b in zip(
-            sim.new_cases_t[0::2],
-            sim.new_cases_t[1::2],
-        )
-    ]
-    plt.plot(daily_new_cases)
-    plt.xlabel("days")
-    plt.ylabel("new cases")
-    plt.title("New Cases Per Day Over Time")
-    plt.savefig(f"{filename}_new_cases.png")
-    plt.show()
-    #sim.run()
-    print("DEATHS:",sum(1 for p in sim.people if p.dead))
 

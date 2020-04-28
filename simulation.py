@@ -48,6 +48,7 @@ class Simulation(AbstractSimulation):
     distancing_exp: float = 6  # the exponent of distancing willingness, higher is more distancing
 
     # parameters
+    day: float = 0
     num_trials: int = 100
     output_state: bool = True
     output_progress_bars: bool = True
@@ -78,11 +79,17 @@ class Simulation(AbstractSimulation):
         self.visible_people = [p for p in self.people if random() < self.fraction_people_show]
         xs, ys, cs = self.get_xs_ys_cs()
         self.scatter=ax.scatter(xs, ys, s=1, c=cs)
+        self.day_text=ax.text(5, 5, '', fontsize=15)
         plt.xlabel("meters")
         plt.ylabel("meters")
 
     def choose_initial_sick(self):
-        initial_sick = choices(self.people, k=self.starting_sick) 
+        assert self.starting_sick >= 0, "starting sick must be non-negative"
+        if self.starting_sick >= 1:
+            starting_sick = self.starting_sick
+        else:
+            starting_sick = round(self.starting_sick*len(self.people))
+        initial_sick = choices(self.people, k=starting_sick) 
         for p in initial_sick:
             p.state = PersonState.ASYMPT
 
@@ -97,6 +104,7 @@ class Simulation(AbstractSimulation):
                 break
 
     def update(self, _):
+        self.day += .5
         prior_sick = self.asymptomatic_count + self.sick_count
 
         for field in fields(self):
@@ -104,11 +112,28 @@ class Simulation(AbstractSimulation):
             if isinstance(attr, list) and attr and isinstance(attr[0], SimulationComponent):
                 for comp in attr:
                     comp.update()
-        sick_post_recorvery = self.asymptomatic_count + self.sick_count
+        post_recovery_sick = self.asymptomatic_count + self.sick_count
         to_be_sick = infection_detector.detect(self)
         for p in to_be_sick:
             p.state = PersonState.ASYMPT
 
+        self.update_stats(prior_sick, post_recovery_sick)
+
+        self.fix_people_out_of_bounds()
+        if self.output_state:
+            self.print_state()
+
+        if self.asymptomatic_count + self.sick_count == 0:
+            raise StopIteration
+        xs, ys, cs = self.get_xs_ys_cs()
+        #plt.xlabel(f"day {self.day}")
+        self.scatter.set_offsets(np.c_[xs, ys])
+        self.scatter.set_color(cs)
+        self.day_text.set_text(f"day {self.day}")
+        #print(dir(self.scatter))
+        return self.scatter, self.day_text
+    
+    def update_stats(self, prior_sick, post_recovery_sick):
         new_sick = self.asymptomatic_count + self.sick_count
         print(f"{prior_sick=}, {new_sick=}")
         if prior_sick == 0:
@@ -116,17 +141,9 @@ class Simulation(AbstractSimulation):
         else:
             R = new_sick / prior_sick
         self.r_t.append(R)
-        new_cases = new_sick - sick_post_recorvery
+        new_cases = new_sick - post_recovery_sick
         self.new_cases_t.append(new_cases)
 
-        self.fix_people_out_of_bounds()
-        if self.output_state:
-            self.print_state()
-
-        xs, ys, cs = self.get_xs_ys_cs()
-        self.scatter.set_offsets(np.c_[xs, ys])
-        self.scatter.set_color(cs)
-        return self.scatter,  
 
     
     @property
