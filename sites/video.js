@@ -17,6 +17,7 @@ function switchContent(content, elmnt, color) {
 
   // Add the specific color to the button used to open the tab content
   elmnt.style.backgroundColor = "#ADADAD";
+  switchSimulations('Case 1', this, 'red')
 }
 
 function switchSimulations(simulations, elmnt, color) {
