@@ -11,7 +11,8 @@
         <button class="tablink" onclick="switchContent('Introduction', this, 'red')" id="defaultOpen">Project Introduction</button>
         <button class="tablink" onclick="switchContent('Simulations', this, 'green')">Simulations</button>
         <button class="tablink" onclick="switchContent('Limitations', this, 'blue')">Limitations</button>
-        <button class="tablink" onclick="switchContent('Conclusion', this, 'orange')">Conclusion</button>
+        <button class="tablink" onclick="switchContent('Conclusion', this, 'orange')">Results</button>
+        <button class="tablink" onclick="switchContent('Tech details', this, 'orange')">technical details</button>
         <div id="Introduction" class="tabcontent">
             <h2>Project description and motivation</h2>
             <p> In an email sent on March 11, President Ryan announced that the University of Virginia would take major operational changes to slow the spread of the COVID-19 disease in the University of Virginia community. UVA would soon move all classes online and effectively prohibit students from returning to grounds for the rest of the spring semester. At the time, these changes were met with much controversy. In the coming weeks after the decision, not only the university community would be affected by this decision. Fourth-year students were not able to enjoy their last semester on grounds or have their graduation ceremony; but also small businesses and restaurants which depend on students had to close, jobs were lost and, overall, it is clear that the Charlottesville community has also been economically impacted by this decision. </p>
@@ -84,10 +85,34 @@
         </div>
 
         <div id="Conclusion" class="tabcontent">
-            <h2>Conclusion</h2>
+            <h2>Results</h2>
             <p>When 1% of the population started sick, preventing the return of UVA students reduced total deaths by 40% from 187 to 112. When 10% of the population started sick, no student return reduced total deaths by 34% from 312 to 206. </p>
 
             <p>Most of the deaths are elderly residents, not students. However, the students, despite being largely geographically isolated from the restart of Charlottesville, still contribute to the overall spread rate, and thus deaths. </p>
+        </div>
+
+
+        <div id="Tech details" class="tabcontent">
+            <h2>Techical details</h2>
+            <p>Our simulation includes 3 main entities, people, homes, and grocery stores. Grocery stores are simply locations that were manually added, and included 2 Krogers, 1 Wegmans, 3 Food Lions, 1 Walmart, 1 Whole Foods, 1 Harris Teeter, and 1 Trader Joe’s. Homes are also simply locations, which were normally distributed around the centroids in NASA Population density data. People have a location, which is determined by their behavior described below.</p>
+
+            <p>People are in one of four states:
+            <li>healthy</li>
+            <li>asymptomatic</li>
+            <li>sick</li>
+            <li>removed</li>
+            </p>
+
+            <p>When healthy, people engage in a random walk. Periodically, people go to the grocery store. We make the assumption that people always go to the closest grocery store. Going to the grocery store involves teleporting to a random location chosen from a uniform distribution in a 60m x 60m square around the grocery store. We chose for people to teleport since the primary mode of transportation in Charlottesville is car, and disease spread is impossible in the car. Additionally, all people periodically teleport to a random location within the simulation area. This simulates people’s reluctance to socially isolate, as people sometimes visit friends or go to popular locations. People are assigned a distancing factor, which determines the frequency of these random teleportations. Most people have a very low distancing factor, meaning they rarely teleport to random locations. However a small proportion of the population has a high distancing factor, meaning some few people are fairly unwilling or unable to socially isolate.</p>
+
+            <p>When asymptomatic, people behave exactly as they do when they are healthy. When sick, people simply stay at home. However, in both states, people are capable of spreading the disease. The spread of disease between two given people is determined by their distance. The pair’s distance is compared to the absolute value of a sample from a normal distribution centered at zero. If the pair’s distance is lesser, the disease spreads. Because Charlottesville along with on-grounds housing has a population or ~51,000, testing for disease spread between every person is infeasible. To make infection detection tractable and to introduce a representation of maximum gathering restrictions, all people are inserted into a k-tree by distance to the current node’s representative person. Then infection detections are brute-forced for each path from root node to leaf node. This definitely ignores many infections that should occur. However, since the list of people is shuffled at each timestep, the tree structure constantly changes, so prolonged proximity will eventually spread the disease, and fleeting spread is limited by k, the children-per-node, representing the maximum gathering size. To our knowledge, this is a novel algorithm.</p>
+
+            <p>When “removed”, people cannot spread the disease, and we make the assumption that they cannot receive it again. Therefore, their behavior has no further impact on the simulation, so they simply stay at home. People can become “removed” by either recovering from the disease successfully or dying. Mortality rate is determined by age, which is assigned by the age range data in the NASA dataset of population density.</p>
+
+            <p>State transitions are determined by a series of random processes. Transition from healthy to asymptomatic is determined by the infection detection process described above. The onset of symptoms is determined by a Poisson process with an expected delay of 5 days. Recovery is also a Poisson process, but with an expected duration of 15 days.</p> 
+
+
+            <p>UVA Grounds is not technically within city limits, which means that the population density data did not include any on-grounds students. To include on-grounds students, we generate student-aged people normally distributed around manually added centroids at Gooch-Dillard, Ohill, Old Dorms, Lawn/Bice, Lambeth, and North Grounds. Conversely, off-grounds students are included in the NASA population density data, so to simulate the absence of UVA students, student-aged people are removed from the simulation in order of distance from the centroid of grounds at the intersection of McCormick and Emmet. </p>
         </div>
 
 		</div>
